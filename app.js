@@ -85,15 +85,158 @@ const dialogHistory = document.getElementById("dialog-history");
 const historyTitle = document.getElementById("history-title");
 const historyList = document.getElementById("history-list");
 const historyClose = document.getElementById("history-close");
+const historyClearAll = document.getElementById("history-clear-all");
+const historySubtitle = document.getElementById("history-subtitle");
 const btnExport = document.getElementById("btn-export");
 const btnImport = document.getElementById("btn-import");
 const importFile = document.getElementById("import-file");
 
 let state = loadState();
 
+/** @type {string | null} */
+let historyActivityId = null;
+
 function persist() {
   saveState(state);
   render();
+  if (dialogHistory.open && historyActivityId) {
+    refreshHistoryDialog();
+  }
+}
+
+/** @param {Activity} activity @param {HTMLDivElement} titleRow */
+function beginRename(activity, titleRow) {
+  titleRow.innerHTML = "";
+  const row = document.createElement("div");
+  row.className = "card__rename-row";
+  const inp = document.createElement("input");
+  inp.type = "text";
+  inp.className = "input card__name-input";
+  inp.value = activity.name;
+  inp.maxLength = 120;
+  inp.setAttribute("aria-label", "Activity name");
+  const btnSave = document.createElement("button");
+  btnSave.type = "button";
+  btnSave.className = "btn btn--small btn--primary";
+  btnSave.textContent = "Save";
+  const btnCancel = document.createElement("button");
+  btnCancel.type = "button";
+  btnCancel.className = "btn btn--small btn--ghost";
+  btnCancel.textContent = "Cancel";
+  row.appendChild(inp);
+  row.appendChild(btnSave);
+  row.appendChild(btnCancel);
+  titleRow.appendChild(row);
+  inp.focus();
+  inp.select();
+  const done = (save) => {
+    if (save) {
+      const t = inp.value.trim();
+      if (t) activity.name = t;
+    }
+    persist();
+  };
+  btnSave.addEventListener("click", () => done(true));
+  btnCancel.addEventListener("click", () => done(false));
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      done(true);
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      done(false);
+    }
+  });
+}
+
+/** @param {string} activityId @param {string} atIso */
+function removeHistoryEntry(activityId, atIso) {
+  const act = state.activities.find((x) => x.id === activityId);
+  if (!act) return;
+  const n = act.events.length;
+  act.events = act.events.filter((e) => e.at !== atIso);
+  if (act.events.length === n) return;
+  persist();
+}
+
+function refreshHistoryDialog() {
+  const id = historyActivityId;
+  if (!id) return;
+  const a = state.activities.find((x) => x.id === id);
+  historyList.innerHTML = "";
+
+  if (!a) {
+    historyTitle.textContent = "History";
+    historySubtitle.textContent = "This activity is no longer in your list.";
+    historyClearAll.disabled = true;
+    const li = document.createElement("li");
+    li.className = "history-empty";
+    li.textContent = "Nothing to show.";
+    historyList.appendChild(li);
+    return;
+  }
+
+  historyTitle.textContent = a.name;
+
+  const events = [...a.events].sort(
+    (x, y) =>
+      (parseIso(y.at)?.getTime() ?? 0) - (parseIso(x.at)?.getTime() ?? 0)
+  );
+  historyClearAll.disabled = events.length === 0;
+
+  if (!events.length) {
+    historySubtitle.textContent =
+      "No logs yet — use “Just now” or “Add that time” on the card.";
+    const li = document.createElement("li");
+    li.className = "history-empty";
+    li.textContent = "No entries yet.";
+    historyList.appendChild(li);
+    return;
+  }
+
+  const n = events.length;
+  const newest = events[0];
+  const nd = parseIso(newest.at);
+  let sub = `${n} ${n === 1 ? "entry" : "entries"}`;
+  if (nd) sub += ` · Most recent ${relativePhrase(nd)}`;
+  historySubtitle.textContent = sub;
+
+  for (const ev of events) {
+    const li = document.createElement("li");
+    li.className = "history-item";
+    const body = document.createElement("div");
+    body.className = "history-item__body";
+    const d = parseIso(ev.at);
+    const whenStr = d ? formatAbsolute(d) : ev.at;
+    const timeEl = document.createElement("time");
+    timeEl.className = "history-item__when";
+    if (d) timeEl.dateTime = ev.at;
+    timeEl.textContent = whenStr;
+    body.appendChild(timeEl);
+    if (d) {
+      const rel = document.createElement("span");
+      rel.className = "history-item__relative";
+      rel.textContent = relativePhrase(d);
+      body.appendChild(rel);
+    }
+    if (ev.note) {
+      const span = document.createElement("span");
+      span.className = "history-item__note";
+      span.textContent = ev.note;
+      body.appendChild(span);
+    }
+    const btnRm = document.createElement("button");
+    btnRm.type = "button";
+    btnRm.className = "history-item__remove";
+    btnRm.innerHTML = "&times;";
+    btnRm.title = "Remove this log";
+    btnRm.setAttribute("aria-label", "Remove this log entry");
+    btnRm.addEventListener("click", () => removeHistoryEntry(id, ev.at));
+    li.appendChild(body);
+    li.appendChild(btnRm);
+    historyList.appendChild(li);
+  }
 }
 
 /** @param {Activity[]} items */
@@ -133,30 +276,8 @@ function sortActivities(items) {
 function openHistory(activityId) {
   const a = state.activities.find((x) => x.id === activityId);
   if (!a) return;
-  historyTitle.textContent = `History: ${a.name}`;
-  const events = [...a.events].sort(
-    (x, y) =>
-      (parseIso(y.at)?.getTime() ?? 0) - (parseIso(x.at)?.getTime() ?? 0)
-  );
-  historyList.innerHTML = "";
-  if (!events.length) {
-    const li = document.createElement("li");
-    li.textContent = "No entries yet.";
-    historyList.appendChild(li);
-  } else {
-    for (const ev of events) {
-      const li = document.createElement("li");
-      const d = parseIso(ev.at);
-      li.appendChild(document.createTextNode(d ? formatAbsolute(d) : ev.at));
-      if (ev.note) {
-        const span = document.createElement("span");
-        span.className = "note";
-        span.textContent = ev.note;
-        li.appendChild(span);
-      }
-      historyList.appendChild(li);
-    }
-  }
+  historyActivityId = activityId;
+  refreshHistoryDialog();
   dialogHistory.showModal();
 }
 
@@ -175,10 +296,20 @@ function render() {
     const card = document.createElement("li");
     card.className = "card" + (last ? "" : " card--never");
 
+    const titleRow = document.createElement("div");
+    titleRow.className = "card__title-row";
     const title = document.createElement("h3");
     title.className = "card__name";
     title.textContent = a.name;
-    card.appendChild(title);
+    const btnRename = document.createElement("button");
+    btnRename.type = "button";
+    btnRename.className = "btn btn--small btn--ghost card__rename";
+    btnRename.textContent = "Rename";
+    btnRename.setAttribute("aria-label", "Rename this activity");
+    btnRename.addEventListener("click", () => beginRename(a, titleRow));
+    titleRow.appendChild(title);
+    titleRow.appendChild(btnRename);
+    card.appendChild(titleRow);
 
     const meta = document.createElement("div");
     meta.className = "card__meta";
@@ -192,51 +323,59 @@ function render() {
     const actions = document.createElement("div");
     actions.className = "card__actions";
 
+    const logBlock = document.createElement("div");
+    logBlock.className = "card__log";
+
     const btnDid = document.createElement("button");
     btnDid.type = "button";
     btnDid.className = "btn btn--primary btn--small";
-    btnDid.textContent = "I did it now";
+    btnDid.textContent = "Just now";
+    btnDid.title = "Record that you did this at the current time";
     btnDid.addEventListener("click", () => {
       a.events.push({ at: new Date().toISOString() });
       persist();
     });
-    actions.appendChild(btnDid);
+    logBlock.appendChild(btnDid);
 
-    const wrapDate = document.createElement("span");
-    wrapDate.className = "inline-date";
+    const rowAlt = document.createElement("div");
+    rowAlt.className = "card__log-row--alt";
+    rowAlt.title = "Use when the thing happened earlier, or to correct a wrong entry";
     const lbl = document.createElement("label");
-    lbl.style.fontSize = "0.8rem";
-    lbl.style.color = "var(--muted)";
-    lbl.textContent = "Or pick time:";
+    lbl.className = "card__log-label";
     lbl.htmlFor = `dt-${a.id}`;
+    lbl.textContent = "Different time";
     const dt = document.createElement("input");
     dt.type = "datetime-local";
     dt.id = `dt-${a.id}`;
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     dt.value = now.toISOString().slice(0, 16);
-    const btnLog = document.createElement("button");
-    btnLog.type = "button";
-    btnLog.className = "btn btn--small";
-    btnLog.textContent = "Log";
-    btnLog.addEventListener("click", () => {
+    const btnAddTime = document.createElement("button");
+    btnAddTime.type = "button";
+    btnAddTime.className = "btn btn--small";
+    btnAddTime.textContent = "Add that time";
+    btnAddTime.title = "Save the date and time above as one log entry";
+    btnAddTime.addEventListener("click", () => {
       const v = dt.value;
       if (!v) return;
       const iso = new Date(v).toISOString();
       a.events.push({ at: iso });
       persist();
     });
-    wrapDate.appendChild(lbl);
-    wrapDate.appendChild(dt);
-    wrapDate.appendChild(btnLog);
-    actions.appendChild(wrapDate);
+    rowAlt.appendChild(lbl);
+    rowAlt.appendChild(dt);
+    rowAlt.appendChild(btnAddTime);
+    logBlock.appendChild(rowAlt);
+
+    const secondary = document.createElement("div");
+    secondary.className = "card__secondary";
 
     const btnHist = document.createElement("button");
     btnHist.type = "button";
     btnHist.className = "btn btn--small btn--ghost";
     btnHist.textContent = "History";
     btnHist.addEventListener("click", () => openHistory(a.id));
-    actions.appendChild(btnHist);
+    secondary.appendChild(btnHist);
 
     const btnDel = document.createElement("button");
     btnDel.type = "button";
@@ -245,10 +384,17 @@ function render() {
     btnDel.addEventListener("click", () => {
       if (confirm(`Remove “${a.name}” and all its logs?`)) {
         state.activities = state.activities.filter((x) => x.id !== a.id);
+        if (historyActivityId === a.id) {
+          historyActivityId = null;
+          dialogHistory.close();
+        }
         persist();
       }
     });
-    actions.appendChild(btnDel);
+    secondary.appendChild(btnDel);
+
+    actions.appendChild(logBlock);
+    actions.appendChild(secondary);
 
     card.appendChild(actions);
     listEl.appendChild(card);
@@ -271,6 +417,27 @@ historyClose.addEventListener("click", () => dialogHistory.close());
 
 dialogHistory.addEventListener("click", (e) => {
   if (e.target === dialogHistory) dialogHistory.close();
+});
+
+dialogHistory.addEventListener("close", () => {
+  historyActivityId = null;
+});
+
+historyClearAll.addEventListener("click", () => {
+  const id = historyActivityId;
+  if (!id) return;
+  const a = state.activities.find((x) => x.id === id);
+  if (!a || !a.events.length) return;
+  const n = a.events.length;
+  if (
+    !confirm(
+      `Remove all ${n} logged time${n === 1 ? "" : "s"} for “${a.name}”? This cannot be undone.`
+    )
+  ) {
+    return;
+  }
+  a.events = [];
+  persist();
 });
 
 btnExport.addEventListener("click", () => {

@@ -1,7 +1,8 @@
-const CACHE = "last-done-v2";
+const CACHE = "last-done-v5";
 
 const PRECACHE = [
   "./index.html",
+  "./help.html",
   "./styles.css",
   "./app.js",
   "./manifest.json",
