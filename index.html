@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Remember when you last did recurring tasks" />
+  <meta name="theme-color" content="#0f1419" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Last Done" />
+  <title>Last Done</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header__brand">
+        <h1 class="header__title">Last Done</h1>
+        <p class="header__tagline">Track when you last did things—gas, bills, car wash, anything.</p>
+      </div>
+      <div class="header__actions">
+        <label class="sort-label" for="sort">Sort</label>
+        <select id="sort" class="select" aria-label="Sort activities">
+          <option value="overdue">Most overdue first</option>
+          <option value="recent">Recently logged</option>
+          <option value="name">Name (A–Z)</option>
+        </select>
+        <button type="button" class="btn btn--ghost" id="btn-export" title="Download backup JSON">Export</button>
+        <button type="button" class="btn btn--ghost" id="btn-import" title="Restore from backup">Import</button>
+        <input type="file" id="import-file" accept="application/json" hidden />
+      </div>
+    </header>
+
+    <section class="add-bar" aria-label="Add activity">
+      <form id="form-add" class="add-form">
+        <input
+          type="text"
+          id="new-name"
+          class="input add-form__name"
+          placeholder="New activity (e.g. Fill gas, Electricity bill)"
+          autocomplete="off"
+          maxlength="120"
+          required
+        />
+        <button type="submit" class="btn btn--primary">Add</button>
+      </form>
+    </section>
+
+    <main>
+      <ul id="list" class="card-list" aria-live="polite"></ul>
+      <p id="empty" class="empty hidden">No activities yet. Add one above to start tracking.</p>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Data stays on this device (local storage). Use Export to back up.
+        Install: open this site in your phone’s browser, then use
+        <strong>Add to Home screen</strong> / <strong>Install app</strong>
+        (needs a secure URL—HTTPS or localhost).
+      </p>
+    </footer>
+  </div>
+
+  <dialog id="dialog-history" class="dialog">
+    <div class="dialog__inner">
+      <header class="dialog__header">
+        <h2 id="history-title" class="dialog__title">History</h2>
+        <button type="button" class="btn btn--icon" id="history-close" aria-label="Close">&times;</button>
+      </header>
+      <ol id="history-list" class="history-list"></ol>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
